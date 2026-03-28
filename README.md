@@ -32,7 +32,7 @@ Before running the project, you need to have the following installed:
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/yourusername/ski-resort-aggregator.git](https://github.com/slava/ski-resort-aggregator.git)
+   git clone [https://github.com/SlavaDir/ski-resort-search](https://github.com/SlavaDir/ski-resort-search)
    cd ski-resort-aggregator
    ```
 
