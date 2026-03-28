@@ -1,8 +1,9 @@
+import os
 import sqlite3
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
-DB_PATH = str(BASE_DIR / "resorts.db")
+DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "resorts.db"))
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -27,8 +28,7 @@ def get_all_resorts(filters=None):
         if filters.get("max_price"):
             query += " AND (day_pass_adult_eur IS NULL OR day_pass_adult_eur <= ?)"
             params.append(float(filters["max_price"]))
-        # ... остальные фильтры как в оригинале ...
-    
+
     query += " ORDER BY name ASC"
     cur.execute(query, params)
     rows = [dict(r) for r in cur.fetchall()]
@@ -40,7 +40,11 @@ def get_stats():
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) as total FROM resort")
     total = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) as complete FROM resort WHERE base_m IS NOT NULL AND peak_m IS NOT NULL AND total_km IS NOT NULL AND day_pass_adult_eur IS NOT NULL")
+    cur.execute("""
+        SELECT COUNT(*) as complete FROM resort
+        WHERE base_m IS NOT NULL AND peak_m IS NOT NULL
+          AND total_km IS NOT NULL AND day_pass_adult_eur IS NOT NULL
+    """)
     complete = cur.fetchone()[0]
     cur.execute("SELECT COUNT(DISTINCT country) as countries FROM resort")
     countries = cur.fetchone()[0]
@@ -53,4 +57,4 @@ def get_countries():
     cur.execute("SELECT DISTINCT country FROM resort WHERE country IS NOT NULL ORDER BY country")
     rows = [r[0] for r in cur.fetchall()]
     conn.close()
-    return rows
+    return rows 

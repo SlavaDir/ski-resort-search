@@ -1,0 +1,14 @@
+services:
+  ski-aggregator:
+    build: .
+    container_name: ski-resorts
+    ports:
+      - "5001:5001"
+    volumes:
+      - db_data:/app/data
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+    restart: unless-stopped
+
+volumes:
+  db_data:
