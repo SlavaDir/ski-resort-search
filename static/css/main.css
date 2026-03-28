@@ -1,0 +1,165 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&family=DM+Mono&display=swap');
+
+:root {
+  --bg-color: #f7f9fa;
+  --surface: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --border: #e5e7eb;
+  --radius: 12px;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  --shadow-lift: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+* { box-sizing: border-box; }
+
+/* Найди свой тег body и обнови его вот так: */
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  
+  /* Эти 3 строчки прижмут футер к низу экрана */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; 
+}
+
+/* Эту строчку добавь, чтобы основной контент растягивался */
+main.container {
+  flex: 1;
+  width: 100%; /* Убедимся, что контейнер занимает всю ширину */
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* --- Аккуратный переключатель (Segmented Control) --- */
+.segmented-control {
+  display: inline-flex;
+  background-color: #e5e7eb;
+  padding: 4px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  margin-bottom: 2rem; /* Отступ до заголовка */
+}
+
+.segmented-control a {
+  text-decoration: none;
+  color: var(--text-muted);
+  padding: 6px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.segmented-control a:hover:not(.active) {
+  color: var(--text-main);
+}
+
+.segmented-control a.active {
+  background-color: var(--surface);
+  color: var(--text-main);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+/* --- Общая шапка для Главной и Админки (строгое совпадение размеров) --- */
+.main-header {
+  padding: 3rem 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.main-header h1 { 
+  margin: 0 0 0.5rem 0; 
+  font-size: 2.75rem; 
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.main-header .stats-info { 
+  color: var(--text-muted); 
+  margin-bottom: 2.5rem; 
+}
+
+/* --- Кнопки --- */
+.btn {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  transition: background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  font-size: 1rem;
+}
+.btn-primary:hover { background: var(--primary-hover); }
+
+
+/* --- Простой текстовый футер --- */
+.footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  margin-top: 3rem; /* Отступ от последних карточек или графиков */
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* --- Modal Styles --- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(17, 24, 39, 0.4); /* Полупрозрачный темный фон */
+  backdrop-filter: blur(4px); /* Современное размытие фона */
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: var(--surface);
+  padding: 2.5rem;
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 600px;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lift);
+}
+
+.close-btn {
+  position: absolute;
+  top: 1rem; right: 1rem;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: var(--text-main);
+}
