@@ -9,8 +9,6 @@ services:
     volumes:
       - db_data:/app/data
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - OLLAMA_URL=http://host.docker.internal:11434
     restart: unless-stopped
 
