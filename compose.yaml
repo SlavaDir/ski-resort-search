@@ -1,6 +1,8 @@
 services:
   ski-aggregator:
     build: .
+     volumes:
+        - ./data:/app/data
     container_name: ski-resorts
     ports:
       - "5001:5001"
