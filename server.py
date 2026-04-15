@@ -1,5 +1,6 @@
 import json
 import sys
+import os
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from db import get_stats, get_all_resorts, get_countries, DB_PATH, BASE_DIR
 from utils import run_subprocess
@@ -60,5 +61,5 @@ def save_targets():
     return jsonify({"status": "success"})
 
 if __name__ == "__main__":
-    # Run the web server on port 5001 with debug mode enabled
-    app.run(host="0.0.0.0", debug=True, port=5001)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host="0.0.0.0", port=port)
