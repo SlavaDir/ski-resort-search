@@ -28,14 +28,14 @@ from pydantic import BaseModel, Field, ValidationError
 
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-DEFAULT_MODEL = "mistral:7b"  # A balanced model for standard home computers
+DEFAULT_MODEL = "mistral:7b" 
 DB_PATH = "resorts.db"
 
 class ResortAltitude(BaseModel):
     
-    base_m: Optional[int] = Field(None, ge=0, le=5000)          # Bottom of the resort
-    peak_m: Optional[int] = Field(None, ge=0, le=6000)          # Highest point
-    vertical_drop_m: Optional[int] = Field(None, ge=0, le=4000) # Total skiable height
+    base_m: Optional[int] = Field(None, ge=0, le=5000)         
+    peak_m: Optional[int] = Field(None, ge=0, le=6000)         
+    vertical_drop_m: Optional[int] = Field(None, ge=0, le=4000)
 
 class ResortTrails(BaseModel):
  
@@ -69,7 +69,7 @@ class ResortModel(BaseModel):
     infrastructure: Optional[ResortInfrastructure] = Field(default_factory=ResortInfrastructure)
     summary: Optional[str] = None
 
-# This is a template we show the AI so it knows how to format its answer
+
 SCHEMA_DESCRIPTION = """
 {
   "resorts": [
@@ -94,8 +94,7 @@ RULES:
 3. Use null for missing values. Convert prices to EUR and distances to metric.
 4. Extract ALL resorts mentioned."""
 
-# --- DATABASE LOGIC ---
-# This part handles saving the data so we don't lose it when the program closes.
+
 
 def init_db(db_path: str = DB_PATH) -> sqlite3.Connection:
     """Creates the database file and the table if they are missing."""
@@ -142,7 +141,7 @@ def save_to_db(resorts: List[ResortModel], source_url: str, db_path: str = DB_PA
     for r in resorts:
         slug = generate_slug(r.name, r.country)
         
-        # Pull data out of the nested models for the database
+      
         base_m     = r.altitude.base_m if r.altitude else None
         peak_m     = r.altitude.peak_m if r.altitude else None
         total_km   = r.trails.total_km if r.trails else None
