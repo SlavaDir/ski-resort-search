@@ -7,12 +7,12 @@ from utils import run_subprocess
 
 app = Flask(__name__)
 
-# Locate the enrichment script in the project directory
+
 ENRICH_PY = str(BASE_DIR / "enrich.py")
 
 @app.route("/")
 def index():
-    """Main dashboard showing the ski resort statistics and map/list."""
+   
     stats = get_stats()
     resorts = get_all_resorts()
     countries = get_countries()
@@ -36,13 +36,12 @@ def admin():
 def run_command(cmd):
     """Starts the background AI extraction process and streams logs to the browser."""
     if cmd == 'discover':
-        # Command to run the discovery script using the saved targets file
+      
         command = ["python", "enrich.py", "--file", "targets.txt"]
     else:
         return "Unknown command", 400
 
-    # Response is sent as a 'text/event-stream' so the user sees live logs
-    return Response(
+    
         stream_with_context(run_subprocess(command)), 
         mimetype='text/event-stream',
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -54,7 +53,7 @@ def save_targets():
     data = request.json
     targets_text = data.get('targets', '')
     
-    # Save to a local file so the enrichment script can read it
+ 
     with open('targets.txt', 'w', encoding='utf-8') as f:
         f.write(targets_text)
         
