@@ -25,21 +25,20 @@ import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field, ValidationError
 
-# --- SETTINGS & DATA MODELS ---
-# These models define exactly what information we want to collect.
+
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "mistral:7b"  # A balanced model for standard home computers
 DB_PATH = "resorts.db"
 
 class ResortAltitude(BaseModel):
-    """Mountain height information in meters."""
+    
     base_m: Optional[int] = Field(None, ge=0, le=5000)          # Bottom of the resort
     peak_m: Optional[int] = Field(None, ge=0, le=6000)          # Highest point
     vertical_drop_m: Optional[int] = Field(None, ge=0, le=4000) # Total skiable height
 
 class ResortTrails(BaseModel):
-    """Details about the ski runs."""
+ 
     total_count: Optional[int] = Field(None, ge=0)
     total_km: Optional[float] = Field(None, ge=0)
     beginner_pct: Optional[float] = Field(None, ge=0, le=100)
@@ -48,18 +47,18 @@ class ResortTrails(BaseModel):
     off_piste: Optional[bool] = None
 
 class ResortPrices(BaseModel):
-    """Cost information in Euros."""
+  
     day_pass_adult_eur: Optional[float] = Field(None, ge=0, le=500)
     season_pass_eur: Optional[float] = Field(None, ge=0)
 
 class ResortInfrastructure(BaseModel):
-    """Facilities and convenience."""
+ 
     ski_in_ski_out: Optional[bool] = None
     distance_to_airport_km: Optional[float] = Field(None, ge=0)
     family_friendly: Optional[bool] = None
 
 class ResortModel(BaseModel):
-    """The complete data profile for a single resort."""
+ 
     name: str
     country: str
     region: Optional[str] = None
@@ -152,7 +151,7 @@ def save_to_db(resorts: List[ResortModel], source_url: str, db_path: str = DB_PA
         ski_in     = r.infrastructure.ski_in_ski_out if r.infrastructure else None
         airport_km = r.infrastructure.distance_to_airport_km if r.infrastructure else None
 
-        # This command saves the data. If the resort already exists, it updates the info.
+     
         cursor.execute("""
             INSERT INTO resort (
                 slug, name, country, region, base_m, peak_m, total_km,
@@ -175,11 +174,10 @@ def save_to_db(resorts: List[ResortModel], source_url: str, db_path: str = DB_PA
     conn.close()
     print(f"[OK] Successfully saved/updated {saved_count} resorts in the database.")
 
-# --- WEB SCRAPER & AI CONNECTOR ---
-# This part gets the text from the internet and sends it to the AI.
+
 
 def fetch_article(url: str) -> str:
-    """Downloads a webpage and strips away the menus and ads, leaving just the text."""
+    
     print(f"[INFO] Downloading: {url}")
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -187,7 +185,7 @@ def fetch_article(url: str) -> str:
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        # Remove parts of the site we don't need
+    
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
 
@@ -200,7 +198,7 @@ def fetch_article(url: str) -> str:
 
 def classify_with_ollama(text: str, model: str, ollama_url: str) -> str:
     """Sends the website text to your local AI to find resort details."""
-    # We shorten the text if it's too long so the computer doesn't get stuck
+
     max_chars = 8000
     if len(text) > max_chars:
         text = text[:max_chars].rsplit('.', 1)[0] + "."
@@ -225,7 +223,7 @@ def classify_with_ollama(text: str, model: str, ollama_url: str) -> str:
 
 def parse_and_validate(raw_llm_response: str) -> List[ResortModel]:
     """Cleans the AI's response and checks if the data follows our rules."""
-    # Remove extra formatting characters the AI might include
+
     cleaned = re.sub(r"```json|```", "", raw_llm_response).strip()
     
     try:
@@ -234,7 +232,7 @@ def parse_and_validate(raw_llm_response: str) -> List[ResortModel]:
         validated = []
         for item in resort_list:
             try:
-                # This ensures the data (like height) isn't an impossible number
+             
                 validated.append(ResortModel(**item))
             except ValidationError as ve:
                 print(f"[SKIP] Invalid data for {item.get('name', 'Unknown')}: {ve}")
@@ -243,7 +241,6 @@ def parse_and_validate(raw_llm_response: str) -> List[ResortModel]:
         print("[ERROR] AI did not return valid JSON. Try again or check the model.")
         return []
 
-# --- MAIN EXECUTION ---
 
 def main():
     parser = argparse.ArgumentParser(description="Extract ski resort info from a URL using local AI.")
@@ -252,16 +249,16 @@ def main():
     parser.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL, help="The address of your Ollama server")
     args = parser.parse_args()
 
-    # Step 1: Get the text
+  
     page_text = fetch_article(args.url)
     
-    # Step 2: Let the AI find the data
+  
     raw_response = classify_with_ollama(page_text, args.model, args.ollama_url)
     
-    # Step 3: Check and clean the data
+  
     resorts = parse_and_validate(raw_response)
     
-    # Step 4: Save to the database
+  
     save_to_db(resorts, source_url=args.url)
 
 if __name__ == "__main__":
