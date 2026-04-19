@@ -1,15 +1,8 @@
 #!/bin/sh
-set -e
 
-echo "Checking database..."
-
-if [ ! -f /app/data/resorts.db ]; then
-    echo "No DB found in volume — copying seed database..."
-    cp /app/data-seed/resorts.db /app/data/resorts.db
-    echo "Seed database copied."
-else
-    echo "Existing database found, skipping copy."
+if [ ! -f "$DB_PATH" ]; then
+    echo "Инициализация базы данных"
+    cp /app/data-seed/resorts.db "$DB_PATH"
 fi
 
-echo "Starting server..."
-exec python server.py
+python server.py

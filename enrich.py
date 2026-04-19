@@ -14,7 +14,7 @@ import requests
 from bs4 import BeautifulSoup
 
 try:
-    # We import functions from app.py to avoid writing the same code twice
+ 
     from app import (
         DB_PATH, DEFAULT_MODEL, DEFAULT_OLLAMA_URL,
         classify_with_ollama, generate_slug, init_db,
@@ -24,23 +24,22 @@ except ImportError:
     print("[ERROR] app.py not found. Please put it in the same folder.", file=sys.stderr)
     sys.exit(1)
 
-# --- SETTINGS ---
-SEARCH_DELAY_SEC = 2.0  # Time to wait between searches to be polite
-MAX_PAGES_TO_SCRAPE = 2 # How many websites to read for each resort
+
+SEARCH_DELAY_SEC = 2.0  
+MAX_PAGES_TO_SCRAPE = 2
 HEADERS = {
     "User-Agent": "SkiResortDataBot/1.0 (test@example.com) - Educational project",
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# --- SEARCH & SCRAPING LOGIC ---
-# These functions help the program "google" information automatically.
+
 
 def search_wikipedia(resort_name):
     """Looks up a resort on Wikipedia and returns the summary text."""
     api = "https://en.wikipedia.org/w/api.php"
     print(f"  [WEB] Searching Wikipedia: {resort_name}")
     try:
-        # First, find the right page title
+       
         resp = requests.get(api, params={
             "action": "query", "list": "search", "srsearch": f"{resort_name} ski resort",
             "srlimit": 3, "format": "json", "utf8": 1,
@@ -50,7 +49,7 @@ def search_wikipedia(resort_name):
         if not results:
             return ""
         
-        # Then, get the actual text content of that page
+       
         resp = requests.get(api, params={
             "action": "query", "titles": results[0]["title"], "prop": "extracts",
             "explaintext": True, "exsectionformat": "plain", "exchars": 5000, "format": "json",
@@ -68,7 +67,7 @@ def search_duckduckgo(query):
         resp = requests.post("https://lite.duckduckgo.com/lite/", data={"q": query}, headers=HEADERS, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        # Find links that look like actual websites (not ads or internal links)
+       
         urls = [a.get("href") for a in soup.find_all("a", class_="result-url") if a.get("href", "").startswith("http")]
         return [u for u in urls if not any(s in u for s in ["duckduckgo.com", "wikipedia.org"])][:MAX_PAGES_TO_SCRAPE]
     except Exception as e:
@@ -76,7 +75,7 @@ def search_duckduckgo(query):
         return []
 
 def scrape_page(url):
-    """Downloads a website and extracts its text."""
+    
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
@@ -89,7 +88,7 @@ def scrape_page(url):
         return ""
 
 def gather_text_for_resort(resort_name):
-    """Combines Wikipedia and web search results into one big text block for the AI."""
+   
     parts = []
     wiki_text = search_wikipedia(resort_name)
     if wiki_text: parts.append(f"=== Wikipedia ===\n{wiki_text}")
@@ -119,20 +118,20 @@ def run_discover(resort_names, ollama_url, model, db_path, dry_run):
         if not name.strip(): continue
         print(f"\n{'='*50}\n[PROCESS] Analyzing: {name}")
         
-        # 1. Search for info
+      
         if not (text := gather_text_for_resort(name)):
             continue
 
-        # 2. Use AI to extract details
+      
         print("  [AI] Local Ollama is processing the text...")
         if not (resorts := parse_and_validate(classify_with_ollama(text, model, ollama_url))):
             continue
 
-        # 3. Check for duplicates
+      
         new = [r for r in resorts if generate_slug(r.name, r.country) not in existing]
         for r in new: existing.add(generate_slug(r.name, r.country))
 
-        # 4. Save
+       
         if new and not dry_run:
             save_to_db(new, source_url="discover:local", db_path=db_path)
         
@@ -140,7 +139,7 @@ def run_discover(resort_names, ollama_url, model, db_path, dry_run):
     
     print("\n[FINISH] All tasks completed.")
 
-# --- COMMAND LINE INTERFACE ---
+
 
 def main():
     parser = argparse.ArgumentParser(description="Local ski resort discovery tool using Ollama.")
