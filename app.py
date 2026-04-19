@@ -20,13 +20,13 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
+import os
 
 import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field, ValidationError
 
-
-OPENAI_API_KEY = "sk-y97_mh4Sk4nBTnop5WkumQ"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_BASE_URL = "https://kurim.ithope.eu/v1"
 DEFAULT_MODEL = "gemma3:27b"  
 DB_PATH = "resorts.db"

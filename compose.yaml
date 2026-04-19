@@ -6,8 +6,6 @@ services:
     environment:
       - PORT=5001
       - DB_PATH=/data/resorts.db
-      - OPENAI_API_KEY=sk-y97_mh4Sk4nBTnop5WkumQ
-      - OPENAI_BASE_URL=https://kurim.ithope.eu/v1
     restart: unless-stopped
     depends_on:
       - cache
