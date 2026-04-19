@@ -1,14 +1,14 @@
 """
-ski_aggregator.py — Ski resort data extractor using local AI.
+ski_aggregator.py — Ski resort data extractor using an OpenAI-compatible API.
 
 This script does four things:
   1. Downloads a webpage from a URL.
-  2. Sends the text to a local AI (Ollama) to find structured data.
+  2. Sends the text to an AI via API to find structured data.
   3. Checks if the data is correct using Pydantic.
   4. Saves the results to a local database (SQLite) and avoids duplicates.
 
 To use:
-  python app.py https://example.com/ski-article
+  python ski_aggregator.py https://example.com/ski-article
 """
 
 import argparse
@@ -28,8 +28,9 @@ from pydantic import BaseModel, Field, ValidationError
 # --- SETTINGS & DATA MODELS ---
 # These models define exactly what information we want to collect.
 
-DEFAULT_OLLAMA_URL = "http://localhost:11434"
-DEFAULT_MODEL = "mistral:7b"  # A balanced model for standard home computers
+OPENAI_API_KEY = "sk-y97_mh4Sk4nBTnop5WkumQ"
+OPENAI_BASE_URL = "https://kurim.ithope.eu/v1"
+DEFAULT_MODEL = "gpt-3.5-turbo"  
 DB_PATH = "resorts.db"
 
 class ResortAltitude(BaseModel):
@@ -198,29 +199,46 @@ def fetch_article(url: str) -> str:
         print(f"[ERROR] Download failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-def classify_with_ollama(text: str, model: str, ollama_url: str) -> str:
-    """Sends the website text to your local AI to find resort details."""
-    # We shorten the text if it's too long so the computer doesn't get stuck
+def classify_with_openai(text: str, model: str) -> str:
+    """Sends the website text to an OpenAI-compatible API to find resort details."""
     max_chars = 8000
     if len(text) > max_chars:
         text = text[:max_chars].rsplit('.', 1)[0] + "."
         print(f"[INFO] Text shortened to {len(text)} characters for better performance.")
 
     prompt = f"Extract resorts into JSON.\nSCHEMA:\n{SCHEMA_DESCRIPTION}\n\nTEXT:\n{text}"
+    
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
     payload = {
-        "model": model, "system": SYSTEM_PROMPT, "prompt": prompt, "stream": False,
-        "options": {"temperature": 0.0, "num_predict": 1000}
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0
     }
 
-    print(f"[INFO] Sending to Ollama ({model})... This uses your CPU.")
+    print(f"[INFO] Sending to API ({model}) at {OPENAI_BASE_URL}...")
     start = time.time()
     try:
-        resp = requests.post(f"{ollama_url}/api/generate", json=payload, timeout=900)
+        resp = requests.post(f"{OPENAI_BASE_URL}/chat/completions", headers=headers, json=payload, timeout=60)
         resp.raise_for_status()
+        
         print(f"[OK] AI finished in {time.time() - start:.1f}s.")
-        return resp.json().get("response", "")
+        
+        response_data = resp.json()
+        return response_data["choices"][0]["message"]["content"]
+        
+    except requests.exceptions.HTTPError as e:
+        print(f"[ERROR] API HTTP error: {e}")
+        print(f"[ERROR] Response content: {resp.text}")
+        sys.exit(1)
     except Exception as e:
-        print(f"[ERROR] Ollama connection error: {e}", file=sys.stderr)
+        print(f"[ERROR] API connection error: {e}", file=sys.stderr)
         sys.exit(1)
 
 def parse_and_validate(raw_llm_response: str) -> List[ResortModel]:
@@ -246,17 +264,16 @@ def parse_and_validate(raw_llm_response: str) -> List[ResortModel]:
 # --- MAIN EXECUTION ---
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract ski resort info from a URL using local AI.")
+    parser = argparse.ArgumentParser(description="Extract ski resort info from a URL using OpenAI API.")
     parser.add_argument("url", help="URL of the article or website to scan")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="The AI model name in Ollama")
-    parser.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL, help="The address of your Ollama server")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="The AI model name")
     args = parser.parse_args()
 
     # Step 1: Get the text
     page_text = fetch_article(args.url)
     
     # Step 2: Let the AI find the data
-    raw_response = classify_with_ollama(page_text, args.model, args.ollama_url)
+    raw_response = classify_with_openai(page_text, args.model)
     
     # Step 3: Check and clean the data
     resorts = parse_and_validate(raw_response)

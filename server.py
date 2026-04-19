@@ -1,5 +1,7 @@
 import json
 import sys
+import os
+import shutil
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from db import get_stats, get_all_resorts, get_countries, DB_PATH, BASE_DIR
 from utils import run_subprocess
@@ -35,8 +37,12 @@ def admin():
 def run_command(cmd):
     """Starts the background AI extraction process and streams logs to the browser."""
     if cmd == 'discover':
-        # Command to run the discovery script using the saved targets file
-        command = ["python", "enrich.py", "--file", "targets.txt"]
+        # ИЗМЕНЕНО: Явно указываем пути к файлу целей и базе данных в папке /data
+        command = [
+            "python", "enrich.py", 
+            "--file", "/data/targets.txt", 
+            "--db", "/data/resorts.db"
+        ]
     else:
         return "Unknown command", 400
 
@@ -53,12 +59,22 @@ def save_targets():
     data = request.json
     targets_text = data.get('targets', '')
     
-    # Save to a local file so the enrichment script can read it
-    with open('targets.txt', 'w', encoding='utf-8') as f:
+    # ИЗМЕНЕНО: Сохраняем в разрешенную для записи папку /data
+    with open('/data/targets.txt', 'w', encoding='utf-8') as f:
         f.write(targets_text)
         
     return jsonify({"status": "success"})
 
 if __name__ == "__main__":
-    # Run the web server on port 5001 with debug mode enabled
-    app.run(host="0.0.0.0", debug=True, port=5001)
+    # ИЗМЕНЕНО: Логика инициализации базы данных прямо в Python
+    if not os.path.exists("/data/resorts.db"):
+        print("База данных не найдена в /data — копируем seed...")
+        os.makedirs("/data", exist_ok=True)
+        shutil.copy2("/app/data-seed/resorts.db", "/data/resorts.db")
+        print("База данных успешно скопирована.")
+    else:
+        print("Используется существующая база данных в /data.")
+
+    # Используем порт 5000 по рекомендации учителя
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
