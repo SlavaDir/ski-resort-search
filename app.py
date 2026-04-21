@@ -1,5 +1,5 @@
 """
-ski_aggregator.py — Ski resort data extractor using an OpenAI-compatible API.
+app.py — Ski resort data extractor using an OpenAI-compatible API.
 
 This script does four things:
   1. Downloads a webpage from a URL.
@@ -26,19 +26,25 @@ import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field, ValidationError
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = "https://kurim.ithope.eu/v1"
 DEFAULT_MODEL = "gemma3:27b"  
 DB_PATH = "resorts.db"
 
+
+def log_msg(stage: str, message: str) -> None:
+    """Prints a formatted log message with a timestamp and forces immediate output."""
+    current_time = datetime.now().strftime("%H:%M:%S")
+    # flush=True is crucial for streaming logs to the web interface in real-time
+    print(f"[{current_time}] [{stage.upper()}] {message}", flush=True)
+
+
 class ResortAltitude(BaseModel):
-    
     base_m: Optional[int] = Field(None, ge=0, le=5000)         
     peak_m: Optional[int] = Field(None, ge=0, le=6000)         
     vertical_drop_m: Optional[int] = Field(None, ge=0, le=4000)
 
 class ResortTrails(BaseModel):
- 
     total_count: Optional[int] = Field(None, ge=0)
     total_km: Optional[float] = Field(None, ge=0)
     beginner_pct: Optional[float] = Field(None, ge=0, le=100)
@@ -47,18 +53,15 @@ class ResortTrails(BaseModel):
     off_piste: Optional[bool] = None
 
 class ResortPrices(BaseModel):
-  
     day_pass_adult_eur: Optional[float] = Field(None, ge=0, le=500)
     season_pass_eur: Optional[float] = Field(None, ge=0)
 
 class ResortInfrastructure(BaseModel):
- 
     ski_in_ski_out: Optional[bool] = None
     distance_to_airport_km: Optional[float] = Field(None, ge=0)
     family_friendly: Optional[bool] = None
 
 class ResortModel(BaseModel):
- 
     name: str
     country: str
     region: Optional[str] = None
@@ -95,14 +98,12 @@ RULES:
 4. Extract ALL resorts mentioned."""
 
 
-
 def init_db(db_path: str = DB_PATH) -> sqlite3.Connection:
-    """Creates the database file and the table if they are missing."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS resort (
-            slug                  TEXT PRIMARY KEY,  -- Unique ID (e.g., france_chamonix)
+            slug                  TEXT PRIMARY KEY,
             name                  TEXT,
             country               TEXT,
             region                TEXT,
@@ -122,26 +123,34 @@ def init_db(db_path: str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 def generate_slug(name: str, country: str) -> str:
-    """Creates a simple ID from the name and country to identify the resort."""
     clean_name = re.sub(r'[^a-z0-9]', '', name.lower())
     clean_country = re.sub(r'[^a-z0-9]', '', country.lower())
     return f"{clean_country}_{clean_name}"
 
 def save_to_db(resorts: List[ResortModel], source_url: str, db_path: str = DB_PATH) -> None:
-    """Writes the resort information to the database file."""
     if not resorts:
-        print("[!] No resorts found to save.")
+        log_msg("DB", "No resorts found to save.")
         return
 
     conn = init_db(db_path)
     cursor = conn.cursor()
     now = datetime.utcnow().isoformat()
 
+    # Get existing slugs to calculate new vs updated
+    existing_slugs = {row[0] for row in cursor.execute("SELECT slug FROM resort").fetchall()}
+    
     saved_count = 0
+    new_count = 0
+    updated_count = 0
+
     for r in resorts:
         slug = generate_slug(r.name, r.country)
         
-      
+        if slug in existing_slugs:
+            updated_count += 1
+        else:
+            new_count += 1
+
         base_m     = r.altitude.base_m if r.altitude else None
         peak_m     = r.altitude.peak_m if r.altitude else None
         total_km   = r.trails.total_km if r.trails else None
@@ -150,7 +159,6 @@ def save_to_db(resorts: List[ResortModel], source_url: str, db_path: str = DB_PA
         ski_in     = r.infrastructure.ski_in_ski_out if r.infrastructure else None
         airport_km = r.infrastructure.distance_to_airport_km if r.infrastructure else None
 
-     
         cursor.execute("""
             INSERT INTO resort (
                 slug, name, country, region, base_m, peak_m, total_km,
@@ -171,36 +179,35 @@ def save_to_db(resorts: List[ResortModel], source_url: str, db_path: str = DB_PA
 
     conn.commit()
     conn.close()
-    print(f"[OK] Successfully saved/updated {saved_count} resorts in the database.")
-
+    log_msg("DB", f"Successfully saved {saved_count} resorts ({new_count} new, {updated_count} updated).")
 
 
 def fetch_article(url: str) -> str:
-    
-    print(f"[INFO] Downloading: {url}")
+    log_msg("FETCH", f"Downloading: {url}")
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "html.parser")
-    
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
 
         text = soup.get_text(separator="\n")
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        return "\n".join(lines)
+        clean_text = "\n".join(lines)
+        
+        log_msg("FETCH", f"Success! Got {len(clean_text)} characters of raw text.")
+        return clean_text
     except Exception as e:
-        print(f"[ERROR] Download failed: {e}", file=sys.stderr)
+        log_msg("ERROR", f"Download failed: {e}")
         sys.exit(1)
 
 def classify_with_openai(text: str, model: str) -> str:
-    """Sends the website text to an OpenAI-compatible API to find resort details."""
     max_chars = 8000
     if len(text) > max_chars:
         text = text[:max_chars].rsplit('.', 1)[0] + "."
-        print(f"[INFO] Text shortened to {len(text)} characters for better performance.")
+        log_msg("AI", f"Text truncated to {len(text)} characters for context limits.")
 
     prompt = f"Extract resorts into JSON.\nSCHEMA:\n{SCHEMA_DESCRIPTION}\n\nTEXT:\n{text}"
     
@@ -218,43 +225,51 @@ def classify_with_openai(text: str, model: str) -> str:
         "temperature": 0.0
     }
 
-    print(f"[INFO] Sending to API ({model}) at {OPENAI_BASE_URL}...")
+    log_msg("AI", f"Sending request to {model}...")
     start = time.time()
     try:
         resp = requests.post(f"{OPENAI_BASE_URL}/chat/completions", headers=headers, json=payload, timeout=60)
         resp.raise_for_status()
         
-        print(f"[OK] AI finished in {time.time() - start:.1f}s.")
-        
         response_data = resp.json()
+        duration = time.time() - start
+        
+        # Extract token usage if available
+        usage = response_data.get("usage", {})
+        p_tokens = usage.get("prompt_tokens", 0)
+        c_tokens = usage.get("completion_tokens", 0)
+        
+        log_msg("AI", f"Done in {duration:.1f}s. Tokens: {p_tokens} prompt / {c_tokens} completion.")
         return response_data["choices"][0]["message"]["content"]
         
     except requests.exceptions.HTTPError as e:
-        print(f"[ERROR] API HTTP error: {e}")
-        print(f"[ERROR] Response content: {resp.text}")
+        log_msg("ERROR", f"API HTTP error: {e}. Response: {resp.text}")
         sys.exit(1)
     except Exception as e:
-        print(f"[ERROR] API connection error: {e}", file=sys.stderr)
+        log_msg("ERROR", f"API connection error: {e}")
         sys.exit(1)
 
 def parse_and_validate(raw_llm_response: str) -> List[ResortModel]:
-    """Cleans the AI's response and checks if the data follows our rules."""
-
     cleaned = re.sub(r"```json|```", "", raw_llm_response).strip()
     
     try:
         data = json.loads(cleaned)
         resort_list = data.get("resorts", [])
         validated = []
+        
         for item in resort_list:
+            resort_name = item.get("name", "Unknown")
             try:
-             
                 validated.append(ResortModel(**item))
             except ValidationError as ve:
-                print(f"[SKIP] Invalid data for {item.get('name', 'Unknown')}: {ve}")
+                # Flatten the error message for cleaner logs
+                error_details = str(ve).replace('\n', ' | ')[:150]
+                log_msg("VALID", f"Skipped resort '{resort_name}': {error_details}...")
+                
+        log_msg("VALID", f"Parsed JSON successfully. Found {len(validated)} valid resorts.")
         return validated
     except json.JSONDecodeError:
-        print("[ERROR] AI did not return valid JSON. Try again or check the model.")
+        log_msg("ERROR", "AI did not return valid JSON. Try again or check the model.")
         return []
 
 
@@ -264,16 +279,9 @@ def main():
     parser.add_argument("--model", default=DEFAULT_MODEL, help="The AI model name")
     args = parser.parse_args()
 
-  
     page_text = fetch_article(args.url)
-    
-    # Step 2: Let the AI find the data
     raw_response = classify_with_openai(page_text, args.model)
-    
-  
     resorts = parse_and_validate(raw_response)
-    
-  
     save_to_db(resorts, source_url=args.url)
 
 if __name__ == "__main__":
