@@ -4,8 +4,13 @@ services:
   ski-aggregator:
     build: .
     environment:
-      - PORT=5001
-      - DB_PATH=/data/resorts.db
+      environment:
+      - PORT=${PORT}
+      - DB_PATH=${DB_PATH}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     restart: unless-stopped
     depends_on:
       - cache
