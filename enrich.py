@@ -20,8 +20,8 @@ try:
         classify_with_ollama, generate_slug, init_db,
         parse_and_validate, save_to_db
     )
-except ImportError:
-    print("[ERROR] app.py not found. Please put it in the same folder.", file=sys.stderr)
+except ImportError as e:
+    print(f"[ERROR] Import failed: {e}", file=sys.stderr)
     sys.exit(1)
 
 
