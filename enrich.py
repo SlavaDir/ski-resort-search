@@ -3,7 +3,7 @@
 enrich.py — Local search and discovery for ski resorts.
 
 This script searches for information using Wikipedia and DuckDuckGo,
-then uses your local AI (Ollama) to turn that text into structured data.
+then uses your AI (OpenAI) to turn that text into structured data.
 """
 
 import argparse
@@ -14,32 +14,29 @@ import requests
 from bs4 import BeautifulSoup
 
 try:
- 
     from app import (
-        DB_PATH, DEFAULT_MODEL, DEFAULT_OLLAMA_URL,
-        classify_with_ollama, generate_slug, init_db,
+        DB_PATH, DEFAULT_MODEL, OPENAI_BASE_URL,
+        classify_with_openai, generate_slug, init_db,
         parse_and_validate, save_to_db
     )
 except ImportError as e:
     print(f"[ERROR] Import failed: {e}", file=sys.stderr)
     sys.exit(1)
 
-
-SEARCH_DELAY_SEC = 2.0  
-MAX_PAGES_TO_SCRAPE = 2
+# --- SETTINGS ---
+SEARCH_DELAY_SEC = 2.0 
+MAX_PAGES_TO_SCRAPE = 2 
 HEADERS = {
     "User-Agent": "SkiResortDataBot/1.0 (test@example.com) - Educational project",
     "Accept-Language": "en-US,en;q=0.9",
 }
-
-
 
 def search_wikipedia(resort_name):
     """Looks up a resort on Wikipedia and returns the summary text."""
     api = "https://en.wikipedia.org/w/api.php"
     print(f"  [WEB] Searching Wikipedia: {resort_name}")
     try:
-       
+        # First, find the right page title
         resp = requests.get(api, params={
             "action": "query", "list": "search", "srsearch": f"{resort_name} ski resort",
             "srlimit": 3, "format": "json", "utf8": 1,
@@ -49,7 +46,7 @@ def search_wikipedia(resort_name):
         if not results:
             return ""
         
-       
+        # Then, get the actual text content of that page
         resp = requests.get(api, params={
             "action": "query", "titles": results[0]["title"], "prop": "extracts",
             "explaintext": True, "exsectionformat": "plain", "exchars": 5000, "format": "json",
@@ -67,7 +64,7 @@ def search_duckduckgo(query):
         resp = requests.post("https://lite.duckduckgo.com/lite/", data={"q": query}, headers=HEADERS, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-       
+        # Find links that look like actual websites (not ads or internal links)
         urls = [a.get("href") for a in soup.find_all("a", class_="result-url") if a.get("href", "").startswith("http")]
         return [u for u in urls if not any(s in u for s in ["duckduckgo.com", "wikipedia.org"])][:MAX_PAGES_TO_SCRAPE]
     except Exception as e:
@@ -75,7 +72,7 @@ def search_duckduckgo(query):
         return []
 
 def scrape_page(url):
-    
+    """Downloads a website and extracts its text."""
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
@@ -88,7 +85,7 @@ def scrape_page(url):
         return ""
 
 def gather_text_for_resort(resort_name):
-   
+    """Combines Wikipedia and web search results into one big text block for the AI."""
     parts = []
     wiki_text = search_wikipedia(resort_name)
     if wiki_text: parts.append(f"=== Wikipedia ===\n{wiki_text}")
@@ -104,9 +101,7 @@ def gather_text_for_resort(resort_name):
             
     return "\n\n".join(parts)
 
-# --- MAIN LOGIC ---
-
-def run_discover(resort_names, ollama_url, model, db_path, dry_run):
+def run_discover(resort_names, openai_url, model, db_path, dry_run):
     """Main loop that goes through the list of resorts and finds data for each."""
     print(f"\n[START] Starting search for {len(resort_names)} resorts...")
     conn = init_db(db_path)
@@ -118,37 +113,35 @@ def run_discover(resort_names, ollama_url, model, db_path, dry_run):
         if not name.strip(): continue
         print(f"\n{'='*50}\n[PROCESS] Analyzing: {name}")
         
-      
+        # 1. Search for info
         if not (text := gather_text_for_resort(name)):
             continue
 
-      
-        print("  [AI] Local Ollama is processing the text...")
-        if not (resorts := parse_and_validate(classify_with_ollama(text, model, ollama_url))):
+        # 2. Use AI to extract details
+        print("  [AI] OpenAI is processing the text...")
+        if not (resorts := parse_and_validate(classify_with_openai(text, model, openai_url))):
             continue
 
-      
+        # 3. Check for duplicates
         new = [r for r in resorts if generate_slug(r.name, r.country) not in existing]
         for r in new: existing.add(generate_slug(r.name, r.country))
 
-       
+        # 4. Save
         if new and not dry_run:
-            save_to_db(new, source_url="discover:local", db_path=db_path)
+            save_to_db(new, source_url="discover:openai", db_path=db_path)
         
         time.sleep(SEARCH_DELAY_SEC)
     
     print("\n[FINISH] All tasks completed.")
 
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Local ski resort discovery tool using Ollama.")
+    parser = argparse.ArgumentParser(description="Local ski resort discovery tool using OpenAI.")
     parser.add_argument("--db", default=DB_PATH, help="Path to database file")
     parser.add_argument("--dry-run", action="store_true", help="Don't save anything, just show output")
     parser.add_argument("--resorts", help='List of resort names separated by commas')
     parser.add_argument("--file", help="A text file with resort names (one per line)")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to use")
-    parser.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL)
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="OpenAI model to use")
+    parser.add_argument("--openai-url", default=OPENAI_BASE_URL)
 
     args = parser.parse_args()
 
@@ -161,7 +154,7 @@ def main():
         print("[ERROR] Please provide resort names using --resorts or --file", file=sys.stderr)
         sys.exit(1)
 
-    run_discover(names, args.ollama_url, args.model, args.db, args.dry_run)
+    run_discover(names, args.openai_url, args.model, args.db, args.dry_run)
 
 if __name__ == "__main__":
     main()
