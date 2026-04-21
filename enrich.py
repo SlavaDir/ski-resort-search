@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-enrich.py — Local search and discovery for ski resorts.
+enrich.py — Search and discovery for ski resorts.
 
 This script searches for information using Wikipedia and DuckDuckGo,
-then uses your AI (OpenAI) to turn that text into structured data.
+then uses AI to turn that text into structured data.
 """
 
 import argparse
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
@@ -20,7 +21,7 @@ try:
         parse_and_validate, save_to_db
     )
 except ImportError as e:
-    print(f"[ERROR] Import failed: {e}", file=sys.stderr)
+    print(f"[ERROR] Import failed: {e}", file=sys.stderr, flush=True)
     sys.exit(1)
 
 # --- SETTINGS ---
@@ -31,10 +32,18 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+# --- HELPER LOGGING FUNCTION ---
+def log_msg(stage: str, message: str) -> None:
+    """Prints a formatted log message with a timestamp and forces immediate output."""
+    current_time = datetime.now().strftime("%H:%M:%S")
+    # flush=True ensures the web UI gets the logs in real-time
+    print(f"[{current_time}] [{stage.upper()}] {message}", flush=True)
+
+
 def search_wikipedia(resort_name):
     """Looks up a resort on Wikipedia and returns the summary text."""
     api = "https://en.wikipedia.org/w/api.php"
-    print(f"  [WEB] Searching Wikipedia: {resort_name}")
+    log_msg("WIKI", f"Searching Wikipedia: {resort_name}")
     try:
         # First, find the right page title
         resp = requests.get(api, params={
@@ -54,12 +63,12 @@ def search_wikipedia(resort_name):
         resp.raise_for_status()
         return next(iter(resp.json().get("query", {}).get("pages", {}).values())).get("extract", "")
     except Exception as e:
-        print(f"  [WARN] Wikipedia error: {e}")
+        log_msg("WARN", f"Wikipedia error: {e}")
         return ""
 
 def search_duckduckgo(query):
     """Searches DuckDuckGo for additional websites about the resort."""
-    print(f"  [SEARCH] Searching DuckDuckGo: {query}")
+    log_msg("SEARCH", f"Searching DuckDuckGo: {query}")
     try:
         resp = requests.post("https://lite.duckduckgo.com/lite/", data={"q": query}, headers=HEADERS, timeout=15)
         resp.raise_for_status()
@@ -68,7 +77,7 @@ def search_duckduckgo(query):
         urls = [a.get("href") for a in soup.find_all("a", class_="result-url") if a.get("href", "").startswith("http")]
         return [u for u in urls if not any(s in u for s in ["duckduckgo.com", "wikipedia.org"])][:MAX_PAGES_TO_SCRAPE]
     except Exception as e:
-        print(f"  [WARN] DuckDuckGo error: {e}")
+        log_msg("WARN", f"DuckDuckGo error: {e}")
         return []
 
 def scrape_page(url):
@@ -88,22 +97,24 @@ def gather_text_for_resort(resort_name):
     """Combines Wikipedia and web search results into one big text block for the AI."""
     parts = []
     wiki_text = search_wikipedia(resort_name)
-    if wiki_text: parts.append(f"=== Wikipedia ===\n{wiki_text}")
+    if wiki_text: 
+        parts.append(f"=== Wikipedia ===\n{wiki_text}")
 
     # If Wikipedia didn't have much info, try a general web search
     if len(wiki_text) < 1000:
-        print("  [INFO] Not enough data found, trying web search...")
+        log_msg("INFO", "Not enough data from Wiki, trying web search...")
         time.sleep(SEARCH_DELAY_SEC)
         for url in search_duckduckgo(f"{resort_name} ski resort trails altitude price"):
-            print(f"  [INFO] Reading page: {url[:60]}...")
-            if page_text := scrape_page(url): parts.append(f"=== {url} ===\n{page_text}")
+            log_msg("FETCH", f"Reading page: {url[:60]}...")
+            if page_text := scrape_page(url): 
+                parts.append(f"=== {url} ===\n{page_text}")
             time.sleep(0.5)
             
     return "\n\n".join(parts)
 
 def run_discover(resort_names, openai_url, model, db_path, dry_run):
     """Main loop that goes through the list of resorts and finds data for each."""
-    print(f"\n[START] Starting search for {len(resort_names)} resorts...")
+    log_msg("START", f"Starting search for {len(resort_names)} resorts...")
     conn = init_db(db_path)
     # Check what we already have in the database to avoid searching twice
     existing = {r[0] for r in conn.cursor().execute("SELECT slug FROM resort").fetchall()}
@@ -111,28 +122,36 @@ def run_discover(resort_names, openai_url, model, db_path, dry_run):
 
     for name in resort_names:
         if not name.strip(): continue
-        print(f"\n{'='*50}\n[PROCESS] Analyzing: {name}")
+        
+        # Adding some visual separation for readability in the logs
+        print("-" * 40, flush=True)
+        log_msg("PROCESS", f"Analyzing: {name}")
         
         # 1. Search for info
         if not (text := gather_text_for_resort(name)):
+            log_msg("SKIP", f"Could not find sufficient text data for {name}.")
             continue
 
         # 2. Use AI to extract details
-        print("  [AI] OpenAI is processing the text...")
+        log_msg("AI", "Sending gathered text to OpenAI...")
         if not (resorts := parse_and_validate(classify_with_openai(text, model, openai_url))):
             continue
 
         # 3. Check for duplicates
         new = [r for r in resorts if generate_slug(r.name, r.country) not in existing]
-        for r in new: existing.add(generate_slug(r.name, r.country))
+        for r in new: 
+            existing.add(generate_slug(r.name, r.country))
 
         # 4. Save
         if new and not dry_run:
             save_to_db(new, source_url="discover:openai", db_path=db_path)
+        elif dry_run:
+            log_msg("INFO", "Dry run enabled. Skipping database save.")
         
         time.sleep(SEARCH_DELAY_SEC)
     
-    print("\n[FINISH] All tasks completed.")
+    print("-" * 40, flush=True)
+    log_msg("FINISH", "All tasks completed.")
 
 def main():
     parser = argparse.ArgumentParser(description="Local ski resort discovery tool using OpenAI.")
@@ -151,7 +170,7 @@ def main():
     elif args.file:
         names = [l.strip() for l in Path(args.file).read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
     else:
-        print("[ERROR] Please provide resort names using --resorts or --file", file=sys.stderr)
+        log_msg("ERROR", "Please provide resort names using --resorts or --file")
         sys.exit(1)
 
     run_discover(names, args.openai_url, args.model, args.db, args.dry_run)
