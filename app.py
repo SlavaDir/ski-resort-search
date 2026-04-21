@@ -203,7 +203,7 @@ def fetch_article(url: str) -> str:
         log_msg("ERROR", f"Download failed: {e}")
         sys.exit(1)
 
-def classify_with_openai(text: str, model: str) -> str:
+def classify_with_openai(text: str, model: str, openai_url: str) -> str:
     max_chars = 8000
     if len(text) > max_chars:
         text = text[:max_chars].rsplit('.', 1)[0] + "."
